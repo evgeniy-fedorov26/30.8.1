@@ -25,9 +25,9 @@ func New(constr string) (*Storage, error) {
 type Task struct {
 	ID         int
 	Opened     time.Time
-	Closed     *time.Time
-	AuthorID   int
-	AssignedID int
+	Closed     *time.Time // Для поддержки NULL значений
+	AuthorID   *int       // Указатель для поддержки NULL значений
+	AssignedID *int       // Указатель для поддержки NULL значений
 	Title      string
 	Content    string
 	Tags       []string
@@ -44,10 +44,10 @@ func (s *Storage) Tasks(taskID, authorID int) ([]Task, error) {
 			t.assigned_id,
 			t.title,
 			t.content,
-			COALESCE(array_agg(tag.name), '{}') AS tags
+			COALESCE(array_agg(label.name), '{}') AS tags
 		FROM tasks t
-		LEFT JOIN task_tags tt ON t.id = tt.task_id
-		LEFT JOIN tags tag ON tt.tag_id = tag.id
+		LEFT JOIN tasks_labels tl ON t.id = tl.task_id
+		LEFT JOIN labels label ON tl.label_id = label.id
 		WHERE
 			($1 = 0 OR t.id = $1) AND
 			($2 = 0 OR t.author_id = $2)
@@ -140,20 +140,20 @@ func (s *Storage) DeleteTask(taskID int) error {
 // AddTagsToTask добавляет метки к задаче
 func (s *Storage) AddTagsToTask(taskID int, tags []string) error {
 	for _, tag := range tags {
-		var tagID int
+		var labelID int
 		err := s.db.QueryRow(context.Background(), `
-			INSERT INTO tags (name)
+			INSERT INTO labels (name)
 			VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
 			RETURNING id;
-		`, tag).Scan(&tagID)
+		`, tag).Scan(&labelID)
 		if err != nil {
 			return err
 		}
 
 		_, err = s.db.Exec(context.Background(), `
-			INSERT INTO task_tags (task_id, tag_id)
+			INSERT INTO tasks_labels (task_id, label_id)
 			VALUES ($1, $2) ON CONFLICT DO NOTHING;
-		`, taskID, tagID)
+		`, taskID, labelID)
 		if err != nil {
 			return err
 		}
@@ -164,7 +164,7 @@ func (s *Storage) AddTagsToTask(taskID int, tags []string) error {
 // UpdateTagsForTask обновляет метки для задачи
 func (s *Storage) UpdateTagsForTask(taskID int, tags []string) error {
 	_, err := s.db.Exec(context.Background(), `
-		DELETE FROM task_tags WHERE task_id = $1;
+		DELETE FROM tasks_labels WHERE task_id = $1;
 	`, taskID)
 	if err != nil {
 		return err
@@ -184,11 +184,11 @@ func (s *Storage) TasksByTag(tag string) ([]Task, error) {
 			t.assigned_id,
 			t.title,
 			t.content,
-			COALESCE(array_agg(tag.name), '{}') AS tags
+			COALESCE(array_agg(label.name), '{}') AS tags
 		FROM tasks t
-		JOIN task_tags tt ON t.id = tt.task_id
-		JOIN tags tag ON tt.tag_id = tag.id
-		WHERE tag.name = $1
+		JOIN tasks_labels tl ON t.id = tl.task_id
+		JOIN labels label ON tl.label_id = label.id
+		WHERE label.name = $1
 		GROUP BY t.id
 		ORDER BY t.id;
 	`, tag)
