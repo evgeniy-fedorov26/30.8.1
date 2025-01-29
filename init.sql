@@ -1,34 +1,39 @@
--- Таблица пользователей
+/*
+    Схема БД для информационной системы
+    отслеживания выполнения задач.
+*/
+
+DROP TABLE IF EXISTS tasks_labels, tasks, labels, users;
+
+-- пользователи системы
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    email VARCHAR(100) UNIQUE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    name TEXT NOT NULL
 );
 
--- Таблица меток
-CREATE TABLE tags (
+-- метки задач
+CREATE TABLE labels (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(50) UNIQUE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    name TEXT NOT NULL UNIQUE
 );
 
--- Таблица задач
-CREATE TABLE task_list (
+-- задачи
+CREATE TABLE tasks (
     id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL,
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    status VARCHAR(20) CHECK (status IN ('pending', 'in_progress', 'completed')) DEFAULT 'pending',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    opened TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,  -- время создания задачи
+    closed TIMESTAMP DEFAULT NULL,  -- время выполнения задачи
+    author_id INTEGER REFERENCES users(id) DEFAULT NULL, -- автор задачи
+    assigned_id INTEGER REFERENCES users(id) DEFAULT NULL, -- ответственный
+    title TEXT, -- название задачи
+    content TEXT -- описание задачи
 );
 
--- Таблица связей задач и меток (многие-ко-многим)
-CREATE TABLE task_tags (
-    task_id INT NOT NULL,
-    tag_id INT NOT NULL,
-    PRIMARY KEY (task_id, tag_id),
-    FOREIGN KEY (task_id) REFERENCES task_list(id) ON DELETE CASCADE,
-    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+-- связь многие - ко- многим между задачами и метками
+CREATE TABLE tasks_labels (
+    task_id INTEGER REFERENCES tasks(id),
+    label_id INTEGER REFERENCES labels(id),
+    PRIMARY KEY (task_id, label_id)
 );
+
+-- наполнение БД начальными данными
+INSERT INTO users (id, name) VALUES (1, 'default');
